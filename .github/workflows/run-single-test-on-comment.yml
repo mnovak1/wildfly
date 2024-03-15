@@ -1,0 +1,45 @@
+name: Trigger WildFly Build and Test on Comment
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+
+jobs:
+  my-dependency-build:
+    name: my-dependency
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: Build and Test my-dependency
+        run: mvn -U -B -ntp clean install
+        shell: bash
+      - name: Archive the repository
+        run:  |
+          cd ~
+          find ./.m2/repository -type d -name "*SNAPSHOT" -print0 | xargs -0 tar -czf ~/my-dependency-maven-repository.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: my-dependency-maven-repository
+          path: ~/my-dependency-maven-repository.tar.gz
+          retention-days: 5
+
+  wildfly-build-and-test-galleon-layers:
+    name: Galleon Linux - JDK11
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    with:
+      test-arguments: ''
+      build-arguments: ''
+      os: "['ubuntu-latest']"
+      java-versions: "['11']"
+      maven-repo-name: my-dependency-maven-repository
+      maven-repo-path: my-dependency-maven-repository.tar.gz
+    needs: my-dependency-build
